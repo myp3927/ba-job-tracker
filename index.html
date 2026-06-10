@@ -25,6 +25,12 @@
       Đăng nhập bằng Google
     </button>
 
+    <!-- Warning shown only inside in-app browsers (GapoWork, Zalo, Messenger...) -->
+    <div class="auth-webview-warn" id="auth-webview-warn" style="display:none;">
+      ⚠️ Bạn đang mở trong trình duyệt của app khác — đăng nhập Google sẽ bị Google chặn.
+      Hãy bấm <strong>••• → "Mở trong trình duyệt"</strong> (Safari/Chrome), hoặc <strong>dùng Email + mật khẩu</strong> bên dưới.
+    </div>
+
     <div class="auth-divider"><span>hoặc dùng email</span></div>
 
     <form id="auth-form" autocomplete="off">

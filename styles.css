@@ -207,6 +207,19 @@
 .btn-google:hover { filter: brightness(0.95); }
 .btn-google:active { transform: translateY(1px); }
 
+.auth-webview-warn {
+  margin-top: 0.9rem;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fcd34d;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-sm);
+}
+
+.auth-webview-warn strong { color: #fde68a; }
+
 .auth-divider {
   display: flex;
   align-items: center;

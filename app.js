@@ -185,6 +185,16 @@ function setAuthMode(mode) {
     'autocomplete', isSignup ? 'new-password' : 'current-password');
 }
 
+// Detect in-app browsers (GapoWork, Zalo, Messenger, Facebook, Instagram...).
+// Google blocks OAuth in these, so we steer users to a real browser / email login.
+function isInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  if (/FBAN|FBAV|Instagram|Line\/|Zalo|GapoWork|Gapo|MicroMessenger|; wv\)|\bwv\b/i.test(ua)) return true;
+  // iOS in-app webviews use AppleWebKit but omit "Safari" in the UA.
+  if (/(iPhone|iPod|iPad)/i.test(ua) && /AppleWebKit/i.test(ua) && !/Safari/i.test(ua)) return true;
+  return false;
+}
+
 function initAuth() {
   const form = document.getElementById('auth-form');
   const emailInput = document.getElementById('auth-email');
@@ -192,6 +202,15 @@ function initAuth() {
   const nameInput = document.getElementById('auth-name');
 
   setAuthMode('login');
+
+  // Warn + disable Google sign-in inside in-app browsers (it would 403).
+  if (isInAppBrowser()) {
+    document.getElementById('auth-webview-warn').style.display = '';
+    const gBtn = document.getElementById('btn-google');
+    gBtn.disabled = true;
+    gBtn.style.opacity = '0.5';
+    gBtn.style.cursor = 'not-allowed';
+  }
 
   // Google sign-in
   document.getElementById('btn-google').addEventListener('click', async () => {
