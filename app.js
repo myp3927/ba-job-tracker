@@ -3,8 +3,23 @@
  * CRUD, filtering, searching, sorting, localStorage persistence, JSON export/import
  */
 
+// ---- Firebase Init ----
+const firebaseConfig = {
+  apiKey: "AIzaSyCbFAWrvAkrEe6ql1Puv_Mx27OwPJui1ic",
+  authDomain: "ba-job-tracker.firebaseapp.com",
+  projectId: "ba-job-tracker",
+  storageBucket: "ba-job-tracker.firebasestorage.app",
+  messagingSenderId: "217577745859",
+  appId: "1:217577745859:web:5dd95d8165035b9eb6a176"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Emails with admin rights — can view ALL users' data. Add more emails here if needed.
+const ADMIN_EMAILS = ['myphuongvlo.2020@gmail.com'];
+
 // ---- Data Layer ----
-const STORAGE_KEY = 'job_tracker_applications';
 const CV_VERSIONS_KEY = 'job_tracker_cv_versions';
 
 function loadCvVersions() {
@@ -52,63 +67,61 @@ function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 }
 
-function loadApplications() {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
+// ---- Firestore: applications collection ----
+function appsCol() { return db.collection('applications'); }
+
+async function addApplication(data) {
+  await appsCol().add({
+    ...data,
+    ownerUid: currentUser.uid,
+    ownerEmail: currentUser.email || '',
+    createdAt: new Date().toISOString()
+  });
 }
 
-function saveApplications(apps) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+async function updateApplication(id, data) {
+  await appsCol().doc(id).update(data);
+}
+
+async function deleteApplication(id) {
+  await appsCol().doc(id).delete();
+}
+
+// Real-time listener — keeps `applications` in sync with Firestore for the current user.
+let unsubscribeApps = null;
+function listenApplications() {
+  if (unsubscribeApps) unsubscribeApps();
+  unsubscribeApps = appsCol()
+    .where('ownerUid', '==', currentUser.uid)
+    .onSnapshot(
+      (snap) => {
+        applications = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        renderStats();
+        renderTable();
+      },
+      (err) => {
+        console.error(err);
+        showToast('Lỗi tải dữ liệu: ' + err.message, 'error');
+      }
+    );
 }
 
 // ---- State ----
-let applications = loadApplications();
+let applications = [];
+let currentUser = null;
+let isAdmin = false;
 let currentFilter = 'all';
 let currentSearch = '';
 let currentSort = { field: 'dateApplied', direction: 'desc' };
 let editingId = null;
 
 // ============================================
-//  Auth Layer — Login / Create Account
-//  NOTE: This is a client-side gate for personal privacy on a shared
-//  device. It is NOT server-grade security: anyone with the device and
-//  browser devtools can bypass it. The password is never stored in plain
-//  text — only a SHA-256 hash + random salt is kept in localStorage.
+//  Auth Layer — Firebase Authentication
+//  Real server-side auth (Google + Email/Password). Each user sees only
+//  their own data; ADMIN_EMAILS can view everyone's data. Enforced by
+//  Firestore Security Rules, not just the client.
 // ============================================
-const AUTH_KEY = 'job_tracker_auth';        // {username, salt, hash}
-const SESSION_KEY = 'job_tracker_session';  // sessionStorage flag
-
-function getAuth() {
-  try {
-    const data = localStorage.getItem(AUTH_KEY);
-    return data ? JSON.parse(data) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setAuth(record) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(record));
-}
-
-function randomSalt() {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hashPassword(password, salt) {
-  const data = new TextEncoder().encode(salt + ':' + password);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function isLoggedIn() {
-  return sessionStorage.getItem(SESSION_KEY) === '1';
-}
+let authMode = 'login'; // 'login' | 'signup'
 
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
@@ -120,98 +133,144 @@ function clearAuthError() {
   document.getElementById('auth-error').classList.remove('show');
 }
 
+// Translate Firebase error codes into friendly Vietnamese messages.
+function friendlyAuthError(err) {
+  const map = {
+    'auth/invalid-email': 'Email không hợp lệ.',
+    'auth/user-not-found': 'Không tìm thấy tài khoản với email này.',
+    'auth/wrong-password': 'Sai mật khẩu.',
+    'auth/invalid-credential': 'Email hoặc mật khẩu không đúng.',
+    'auth/email-already-in-use': 'Email này đã được đăng ký. Hãy chọn "Đăng nhập".',
+    'auth/weak-password': 'Mật khẩu phải có ít nhất 6 ký tự.',
+    'auth/popup-closed-by-user': 'Bạn đã đóng cửa sổ đăng nhập Google.',
+    'auth/popup-blocked': 'Trình duyệt chặn cửa sổ pop-up. Hãy cho phép pop-up rồi thử lại.',
+    'auth/network-request-failed': 'Lỗi mạng. Kiểm tra kết nối internet.'
+  };
+  return map[err.code] || ('Lỗi đăng nhập: ' + (err.message || err.code));
+}
+
+function showLogin() {
+  document.getElementById('auth-overlay').style.display = '';
+  document.getElementById('app-container').style.display = 'none';
+}
+
 function startApp() {
   document.getElementById('auth-overlay').style.display = 'none';
   document.getElementById('app-container').style.display = '';
-  if (startApp._initialized) return;
-  startApp._initialized = true;
-  renderStats();
-  renderTable();
-  setupEventListeners();
+  if (!startApp._initialized) {
+    startApp._initialized = true;
+    setupEventListeners();
+  }
 }
 
-function logout() {
-  sessionStorage.removeItem(SESSION_KEY);
-  location.reload();
+async function logout() {
+  if (unsubscribeApps) { unsubscribeApps(); unsubscribeApps = null; }
+  await auth.signOut();
+  // onAuthStateChanged will show the login screen.
+}
+
+// Switch the auth card between Login and Sign-up modes.
+function setAuthMode(mode) {
+  authMode = mode;
+  clearAuthError();
+  const isSignup = mode === 'signup';
+  document.getElementById('auth-subtitle').textContent = isSignup
+    ? 'Tạo tài khoản mới' : 'Đăng nhập để tiếp tục';
+  document.getElementById('auth-submit').textContent = isSignup ? 'Đăng ký' : 'Đăng nhập';
+  document.getElementById('auth-name-field').style.display = isSignup ? '' : 'none';
+  document.getElementById('auth-switch-text').textContent = isSignup
+    ? 'Đã có tài khoản?' : 'Chưa có tài khoản?';
+  document.getElementById('auth-switch-link').textContent = isSignup ? 'Đăng nhập' : 'Đăng ký';
+  document.getElementById('auth-password').setAttribute(
+    'autocomplete', isSignup ? 'new-password' : 'current-password');
 }
 
 function initAuth() {
-  // Already authenticated this session → skip straight to the app.
-  if (isLoggedIn()) {
-    startApp();
-    return;
-  }
-
-  const account = getAuth();
-  const createMode = !account; // no account yet → first-run setup
-
   const form = document.getElementById('auth-form');
-  const subtitle = document.getElementById('auth-subtitle');
-  const submitBtn = document.getElementById('auth-submit');
-  const confirmField = document.getElementById('auth-confirm-field');
-  const hint = document.getElementById('auth-hint');
-  const usernameInput = document.getElementById('auth-username');
+  const emailInput = document.getElementById('auth-email');
   const passwordInput = document.getElementById('auth-password');
-  const confirmInput = document.getElementById('auth-confirm');
+  const nameInput = document.getElementById('auth-name');
 
-  if (createMode) {
-    subtitle.textContent = 'Tạo tài khoản để bảo vệ dữ liệu của bạn';
-    submitBtn.textContent = 'Tạo tài khoản';
-    confirmField.style.display = '';
-    hint.textContent = 'Đây là lần đầu sử dụng. Hãy tạo tài khoản — dữ liệu lưu cục bộ trên trình duyệt này.';
-  } else {
-    subtitle.textContent = 'Đăng nhập để tiếp tục';
-    submitBtn.textContent = 'Đăng nhập';
-    confirmField.style.display = 'none';
-    hint.textContent = 'Quên mật khẩu? Mật khẩu không thể khôi phục — xem hướng dẫn reset trong README.';
-    usernameInput.focus();
-  }
+  setAuthMode('login');
 
-  // Show/hide password toggle
-  document.getElementById('auth-toggle-pw').addEventListener('click', () => {
-    const isPw = passwordInput.type === 'password';
-    passwordInput.type = isPw ? 'text' : 'password';
+  // Google sign-in
+  document.getElementById('btn-google').addEventListener('click', async () => {
+    clearAuthError();
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await auth.signInWithPopup(provider);
+    } catch (err) {
+      showAuthError(friendlyAuthError(err));
+    }
   });
 
+  // Show/hide password
+  document.getElementById('auth-toggle-pw').addEventListener('click', () => {
+    passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+  });
+
+  // Switch login <-> signup
+  document.getElementById('auth-switch-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    setAuthMode(authMode === 'login' ? 'signup' : 'login');
+  });
+
+  // Email/password submit
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearAuthError();
-
-    const username = usernameInput.value.trim();
+    const email = emailInput.value.trim();
     const password = passwordInput.value;
-
-    if (!username || !password) {
-      showAuthError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
+    if (!email || !password) {
+      showAuthError('Vui lòng nhập email và mật khẩu.');
       return;
     }
-
-    if (createMode) {
-      if (password.length < 6) {
-        showAuthError('Mật khẩu phải có ít nhất 6 ký tự.');
-        return;
+    try {
+      if (authMode === 'signup') {
+        if (password.length < 6) {
+          showAuthError('Mật khẩu phải có ít nhất 6 ký tự.');
+          return;
+        }
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
+        const displayName = nameInput.value.trim();
+        if (displayName) await cred.user.updateProfile({ displayName });
+      } else {
+        await auth.signInWithEmailAndPassword(email, password);
       }
-      if (password !== confirmInput.value) {
-        showAuthError('Mật khẩu xác nhận không khớp.');
-        return;
-      }
-      const salt = randomSalt();
-      const hash = await hashPassword(password, salt);
-      setAuth({ username, salt, hash });
-      sessionStorage.setItem(SESSION_KEY, '1');
-      showToast('Tạo tài khoản thành công! 🎉', 'success');
-      startApp();
-      return;
+    } catch (err) {
+      showAuthError(friendlyAuthError(err));
     }
+  });
 
-    // Login mode — verify against stored hash
-    const hash = await hashPassword(password, account.salt);
-    if (username === account.username && hash === account.hash) {
-      sessionStorage.setItem(SESSION_KEY, '1');
+  // React to login/logout
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      currentUser = user;
+      isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+
+      // Record/refresh the user profile (so admin can see who's using the app).
+      try {
+        await db.collection('users').doc(user.uid).set({
+          email: user.email || '',
+          displayName: user.displayName || '',
+          lastLogin: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Could not write user profile:', err);
+      }
+
+      document.getElementById('user-email').textContent = user.email || user.displayName || '';
+      document.getElementById('tab-btn-admin').style.display = isAdmin ? '' : 'none';
+
+      listenApplications();
       startApp();
     } else {
-      showAuthError('Tên đăng nhập hoặc mật khẩu không đúng.');
-      passwordInput.value = '';
-      passwordInput.focus();
+      currentUser = null;
+      isAdmin = false;
+      if (unsubscribeApps) { unsubscribeApps(); unsubscribeApps = null; }
+      applications = [];
+      document.getElementById('tab-btn-admin').style.display = 'none';
+      showLogin();
     }
   });
 }
@@ -246,6 +305,9 @@ function setupEventListeners() {
     document.getElementById('filter-platform').dataset.value = e.target.value;
     renderTable();
   });
+
+  // Admin tab → load all users' data when opened
+  document.getElementById('tab-btn-admin').addEventListener('click', renderAdminView);
 
   // Export
   document.getElementById('btn-export').addEventListener('click', exportData);
@@ -497,7 +559,7 @@ function closeModal() {
   editingId = null;
 }
 
-function handleFormSubmit(e) {
+async function handleFormSubmit(e) {
   e.preventDefault();
 
   const appData = {
@@ -516,22 +578,19 @@ function handleFormSubmit(e) {
     updatedAt: new Date().toISOString()
   };
 
-  if (editingId) {
-    const idx = applications.findIndex(a => a.id === editingId);
-    if (idx !== -1) {
-      applications[idx] = { ...applications[idx], ...appData };
+  try {
+    if (editingId) {
+      await updateApplication(editingId, appData);
+      showToast('Đã cập nhật đơn ứng tuyển!', 'success');
+    } else {
+      await addApplication(appData);
+      showToast('Đã thêm đơn ứng tuyển!', 'success');
     }
-    showToast('Application updated successfully!', 'success');
-  } else {
-    appData.id = generateId();
-    appData.createdAt = new Date().toISOString();
-    applications.unshift(appData);
-    showToast('Application added successfully!', 'success');
+    closeModal();
+    // The real-time listener re-renders the table automatically.
+  } catch (err) {
+    showToast('Lỗi lưu dữ liệu: ' + err.message, 'error');
   }
-
-  saveApplications(applications);
-  closeModal();
-  renderTable();
 }
 
 // ---- Detail Modal ----
@@ -618,12 +677,14 @@ function closeConfirmModal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('btn-confirm-delete').addEventListener('click', () => {
+  document.getElementById('btn-confirm-delete').addEventListener('click', async () => {
     if (deleteTargetId) {
-      applications = applications.filter(a => a.id !== deleteTargetId);
-      saveApplications(applications);
-      renderTable();
-      showToast('Application deleted.', 'info');
+      try {
+        await deleteApplication(deleteTargetId);
+        showToast('Đã xoá đơn ứng tuyển.', 'info');
+      } catch (err) {
+        showToast('Lỗi xoá: ' + err.message, 'error');
+      }
     }
     closeConfirmModal();
   });
@@ -650,30 +711,109 @@ function importData(e) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = (event) => {
+  reader.onload = async (event) => {
     try {
       const imported = JSON.parse(event.target.result);
       if (!Array.isArray(imported)) throw new Error('Invalid format');
 
-      // Merge: skip duplicates by id
+      // Add each imported record as a new cloud document for the current user.
+      // Strip identity fields so they can't overwrite another user's data.
       let added = 0;
-      imported.forEach(item => {
-        if (!applications.find(a => a.id === item.id)) {
-          applications.push(item);
-          added++;
-        }
-      });
-
-      saveApplications(applications);
-      renderTable();
-      showToast(`Imported ${added} new application(s).`, 'success');
-    } catch {
-      showToast('Invalid file format. Expected JSON array.', 'error');
+      for (const item of imported) {
+        const { id, ownerUid, ownerEmail, createdAt, ...rest } = item;
+        await addApplication(rest);
+        added++;
+      }
+      showToast(`Đã nhập ${added} đơn ứng tuyển.`, 'success');
+    } catch (err) {
+      showToast('File không hợp lệ. Cần file JSON. ' + (err.message || ''), 'error');
     }
-    // Reset input
     e.target.value = '';
   };
   reader.readAsText(file);
+}
+
+// ============================================
+//  Admin View — view ALL users' applications
+//  Only works for ADMIN_EMAILS (also enforced by Firestore rules).
+// ============================================
+async function renderAdminView() {
+  const container = document.getElementById('admin-content');
+  if (!isAdmin) {
+    container.innerHTML = '<p class="admin-empty">Bạn không có quyền quản trị.</p>';
+    return;
+  }
+  container.innerHTML = '<p class="admin-loading">⏳ Đang tải dữ liệu của tất cả người dùng...</p>';
+
+  try {
+    const [appsSnap, usersSnap] = await Promise.all([
+      appsCol().get(),
+      db.collection('users').get()
+    ]);
+
+    const allApps = appsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const userMeta = {};
+    usersSnap.docs.forEach((d) => { userMeta[d.data().email] = d.data(); });
+
+    // Group applications by owner email.
+    const groups = {};
+    allApps.forEach((a) => {
+      const key = a.ownerEmail || '(không rõ)';
+      (groups[key] = groups[key] || []).push(a);
+    });
+
+    // Make sure users with no applications still appear.
+    Object.keys(userMeta).forEach((email) => { if (!groups[email]) groups[email] = []; });
+
+    const emails = Object.keys(groups).sort();
+    if (emails.length === 0) {
+      container.innerHTML = '<p class="admin-empty">Chưa có người dùng nào.</p>';
+      return;
+    }
+
+    const summary = `
+      <div class="admin-summary">
+        <div class="admin-stat"><span class="admin-stat-num">${emails.length}</span><span class="admin-stat-label">Người dùng</span></div>
+        <div class="admin-stat"><span class="admin-stat-num">${allApps.length}</span><span class="admin-stat-label">Tổng đơn ứng tuyển</span></div>
+      </div>`;
+
+    const sections = emails.map((email) => {
+      const apps = groups[email].slice().sort((a, b) =>
+        (b.dateApplied || '').localeCompare(a.dateApplied || ''));
+      const meta = userMeta[email];
+      const lastLogin = meta && meta.lastLogin ? formatDate(meta.lastLogin.split('T')[0]) : '—';
+      const rows = apps.length === 0
+        ? '<tr><td colspan="5" class="admin-none">Chưa có đơn nào</td></tr>'
+        : apps.map((a) => `
+            <tr>
+              <td>${escapeHtml(a.company || '')}<br><span class="admin-pos">${escapeHtml(a.position || '')}</span></td>
+              <td>${escapeHtml(a.platform || '—')}</td>
+              <td>${formatDate(a.dateApplied)}</td>
+              <td><span class="status-badge ${(a.status || '').toLowerCase()}">${escapeHtml(a.status || '')}</span></td>
+              <td>${a.salary ? escapeHtml(a.salary) : '—'}</td>
+            </tr>`).join('');
+
+      return `
+        <details class="admin-user" ${emails.length <= 3 ? 'open' : ''}>
+          <summary>
+            <span class="admin-user-email">👤 ${escapeHtml(email)}</span>
+            <span class="admin-user-count">${apps.length} đơn · đăng nhập gần nhất: ${lastLogin}</span>
+          </summary>
+          <div class="table-scroll">
+            <table class="admin-table">
+              <thead><tr><th>Công ty / Vị trí</th><th>Nền tảng</th><th>Ngày nộp</th><th>Trạng thái</th><th>Lương</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </details>`;
+    }).join('');
+
+    container.innerHTML = summary + sections;
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<p class="admin-empty">❌ Lỗi tải dữ liệu: ${escapeHtml(err.message || '')}<br>
+      <small>Nếu lỗi "permission", hãy kiểm tra lại Firestore Security Rules.</small></p>`;
+  }
 }
 
 // ---- Toast ----

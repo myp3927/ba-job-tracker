@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Admin = these emails. Keep in sync with ADMIN_EMAILS in app.js.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email in ['myphuongvlo.2020@gmail.com'];
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // User profiles: a user manages their own profile; admin can read all.
+    match /users/{uid} {
+      allow read:  if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Job applications: owner has full access to their own; admin can read & manage all.
+    match /applications/{appId} {
+      allow read:          if signedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create:        if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+  }
+}

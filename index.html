@@ -11,8 +11,8 @@
 </head>
 <body>
 
-<!-- ===== AUTH GATE: Login / Create Account ===== -->
-<div class="auth-overlay" id="auth-overlay">
+<!-- ===== AUTH GATE: Login / Sign-up (Firebase) ===== -->
+<div class="auth-overlay" id="auth-overlay" style="display:none;">
   <div class="auth-card">
     <div class="auth-brand">
       <div class="auth-logo">📋</div>
@@ -20,10 +20,17 @@
       <p id="auth-subtitle">Đăng nhập để tiếp tục</p>
     </div>
 
+    <button type="button" class="btn-google" id="btn-google">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.4 29.3 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.6 6.1 29.1 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c2.8 0 5.4 1.1 7.3 2.8l5.7-5.7C33.6 6.1 29.1 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 34.8 26.7 36 24 36c-5.3 0-9.7-2.6-11.3-7l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.1 5.6l6.2 5.2C39.4 36.2 44 30.7 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+      Đăng nhập bằng Google
+    </button>
+
+    <div class="auth-divider"><span>hoặc dùng email</span></div>
+
     <form id="auth-form" autocomplete="off">
       <div class="auth-field">
-        <label for="auth-username">Tên đăng nhập</label>
-        <input type="text" id="auth-username" autocomplete="username" placeholder="Nhập tên đăng nhập" required>
+        <label for="auth-email">Email</label>
+        <input type="email" id="auth-email" autocomplete="email" placeholder="email@example.com" required>
       </div>
 
       <div class="auth-field">
@@ -34,10 +41,10 @@
         </div>
       </div>
 
-      <!-- Only shown in "create account" mode -->
-      <div class="auth-field" id="auth-confirm-field" style="display:none;">
-        <label for="auth-confirm">Xác nhận mật khẩu</label>
-        <input type="password" id="auth-confirm" autocomplete="new-password" placeholder="Nhập lại mật khẩu">
+      <!-- Only shown in sign-up mode -->
+      <div class="auth-field" id="auth-name-field" style="display:none;">
+        <label for="auth-name">Tên hiển thị</label>
+        <input type="text" id="auth-name" autocomplete="name" placeholder="Tên của bạn">
       </div>
 
       <div class="auth-error" id="auth-error"></div>
@@ -45,7 +52,12 @@
       <button type="submit" class="btn btn-primary btn-lg auth-submit" id="auth-submit">Đăng nhập</button>
     </form>
 
-    <p class="auth-hint" id="auth-hint"></p>
+    <p class="auth-switch">
+      <span id="auth-switch-text">Chưa có tài khoản?</span>
+      <a href="#" id="auth-switch-link">Đăng ký</a>
+    </p>
+
+    <p class="auth-notice">🔒 Quản trị viên có thể xem dữ liệu bạn nhập để kiểm tra. Vui lòng không lưu thông tin quá nhạy cảm.</p>
   </div>
 </div>
 
@@ -53,7 +65,10 @@
 
   <!-- Header -->
   <header class="app-header">
-    <button class="btn btn-secondary btn-sm auth-logout-btn" id="btn-logout" title="Đăng xuất">🔒 Đăng xuất</button>
+    <div class="header-user">
+      <span class="user-email" id="user-email"></span>
+      <button class="btn btn-secondary btn-sm" id="btn-logout" title="Đăng xuất">🔒 Đăng xuất</button>
+    </div>
     <h1>📋 Job Application Tracker</h1>
     <p>Track applications · Manage interviews · Land your next role</p>
   </header>
@@ -62,6 +77,7 @@
   <nav class="tab-nav">
     <button class="tab-btn active" data-tab="tracker" id="tab-btn-tracker">📊 Application Tracker</button>
     <button class="tab-btn" data-tab="matcher" id="tab-btn-matcher">🎯 CV vs JD Matcher</button>
+    <button class="tab-btn" data-tab="admin" id="tab-btn-admin" style="display:none;">🛡️ Quản trị</button>
   </nav>
 
   <!-- ===== TAB 1: Tracker ===== -->
@@ -295,6 +311,15 @@
 
   </div><!-- end panel-matcher -->
 
+  <!-- ===== TAB 3: Admin ===== -->
+  <div class="tab-panel" id="panel-admin">
+    <div class="matcher-intro">
+      <h2>🛡️ Quản trị — Dữ liệu tất cả người dùng</h2>
+      <p>Xem dữ liệu đơn ứng tuyển của mọi người dùng để kiểm tra. Chỉ tài khoản admin mới truy cập được.</p>
+    </div>
+    <div id="admin-content"></div>
+  </div><!-- end panel-admin -->
+
   <!-- Footer -->
   <footer class="app-footer">
     Nguyen Thi My Phuong — Job Application Tracker &copy; 2026
@@ -440,6 +465,10 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

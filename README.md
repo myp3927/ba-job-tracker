@@ -1,33 +1,39 @@
 # Job Application Tracker
 
-Ứng dụng web tĩnh (HTML/CSS/JS thuần) để theo dõi đơn ứng tuyển, phỏng vấn và đối chiếu CV với JD.
-Mở trực tiếp `index.html` trong trình duyệt — không cần cài đặt, không cần server.
+Ứng dụng web theo dõi đơn ứng tuyển, phỏng vấn và đối chiếu CV với JD.
+Giao diện là web tĩnh (HTML/CSS/JS thuần), dữ liệu lưu trên **Firebase Cloud**.
+
+Live: https://myp3927.github.io/ba-job-tracker/
 
 ## Đăng nhập
 
-- **Lần đầu sử dụng:** màn hình sẽ yêu cầu **tạo tài khoản** (tên đăng nhập + mật khẩu, tối thiểu 6 ký tự).
-- **Các lần sau:** phải **đăng nhập** đúng tài khoản mới vào được ứng dụng.
-- Phiên đăng nhập giữ trong suốt phiên trình duyệt (`sessionStorage`); đóng trình duyệt → mở lại phải đăng nhập lại.
-- Nút **🔒 Đăng xuất** nằm góc trên bên phải header.
+- **Đăng nhập bằng Google** (1 chạm) hoặc **Email + Mật khẩu**.
+- Mỗi người dùng có dữ liệu riêng, lưu trên cloud → đăng nhập máy nào cũng thấy.
+- Nút **🔒 Đăng xuất** ở góc trên bên phải.
 
-Mật khẩu **không bao giờ lưu dạng văn bản thường** — chỉ lưu mã băm `SHA-256` cùng một `salt` ngẫu nhiên trong `localStorage` (khóa `job_tracker_auth`).
+## Phân quyền
 
-## Quên / đặt lại mật khẩu
+- **Người dùng thường:** chỉ thấy đơn ứng tuyển của chính mình.
+- **Admin** (email trong `ADMIN_EMAILS` ở `app.js`): thấy thêm tab **🛡️ Quản trị** để xem dữ liệu của tất cả người dùng.
+- Quyền được thực thi bằng **Firestore Security Rules** (phía server), không phải chỉ ẩn/hiện trên giao diện.
 
-Mật khẩu không thể khôi phục. Để đặt lại, mở **DevTools → Console** trên trang và chạy:
+## Cấu trúc Firebase
 
-```js
-localStorage.removeItem('job_tracker_auth');   // xóa tài khoản hiện tại
-location.reload();                              // tải lại → quay về màn hình tạo tài khoản
-```
+- **Authentication:** Email/Password + Google.
+- **Firestore collections:**
+  - `users/{uid}` — `{ email, displayName, lastLogin }`
+  - `applications/{appId}` — `{ ownerUid, ownerEmail, company, position, platform, status, dateApplied, ... }`
+- Cấu hình `firebaseConfig` nằm ở đầu `app.js` (an toàn để công khai — bảo mật nằm ở Security Rules).
+- Security Rules: xem `firestore.rules`.
 
-> Lưu ý: thao tác này chỉ xóa tài khoản, **không** xóa dữ liệu đơn ứng tuyển
-> (`job_tracker_applications`) hay CV versions (`job_tracker_cv_versions`).
+## Thiết lập lại / chuyển sang Firebase project khác
 
-## ⚠️ Giới hạn bảo mật — đọc kỹ
+1. Sửa `firebaseConfig` ở đầu `app.js`.
+2. Sửa danh sách admin: `ADMIN_EMAILS` trong `app.js` **và** mảng email trong `firestore.rules`.
+3. Dán nội dung `firestore.rules` vào Firebase Console → Firestore → tab **Rules** → **Publish**.
+4. Thêm domain (vd `myp3927.github.io`) vào Authentication → **Settings** → **Authorized domains**.
 
-Đây là **lớp bảo vệ phía client** để giữ riêng tư trên máy dùng chung, **không phải bảo mật cấp server**:
+## Tính năng khác
 
-- Toàn bộ dữ liệu nằm trong `localStorage` của trình duyệt — ai có quyền truy cập máy + DevTools đều có thể đọc/xóa dữ liệu hoặc gỡ tài khoản.
-- Không có mã hóa dữ liệu đơn ứng tuyển; chỉ mật khẩu được băm.
-- Nếu cần bảo mật thật (nhiều người dùng, dữ liệu nhạy cảm, truy cập qua internet), cần một **backend thực** (server xác thực + cơ sở dữ liệu). Cấu trúc tĩnh hiện tại không đáp ứng được điều đó.
+- **CV vs JD Matcher** (tab 2): đối chiếu CV với JD bằng AI. API key của AI lưu cục bộ trên trình duyệt (không lên cloud — vì là khoá bí mật).
+- **Export / Import** JSON cho dữ liệu đơn ứng tuyển.
