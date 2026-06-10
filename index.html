@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Track your job applications, interviews, and offers in one place.">
+  <title>Job Application Tracker — Nguyen Thi My Phuong</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+<!-- ===== AUTH GATE: Login / Create Account ===== -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="auth-logo">📋</div>
+      <h1>Job Application Tracker</h1>
+      <p id="auth-subtitle">Đăng nhập để tiếp tục</p>
+    </div>
+
+    <form id="auth-form" autocomplete="off">
+      <div class="auth-field">
+        <label for="auth-username">Tên đăng nhập</label>
+        <input type="text" id="auth-username" autocomplete="username" placeholder="Nhập tên đăng nhập" required>
+      </div>
+
+      <div class="auth-field">
+        <label for="auth-password">Mật khẩu</label>
+        <div class="auth-password-wrap">
+          <input type="password" id="auth-password" autocomplete="current-password" placeholder="Nhập mật khẩu" required>
+          <button type="button" class="auth-eye" id="auth-toggle-pw" title="Hiện/ẩn mật khẩu" tabindex="-1">👁</button>
+        </div>
+      </div>
+
+      <!-- Only shown in "create account" mode -->
+      <div class="auth-field" id="auth-confirm-field" style="display:none;">
+        <label for="auth-confirm">Xác nhận mật khẩu</label>
+        <input type="password" id="auth-confirm" autocomplete="new-password" placeholder="Nhập lại mật khẩu">
+      </div>
+
+      <div class="auth-error" id="auth-error"></div>
+
+      <button type="submit" class="btn btn-primary btn-lg auth-submit" id="auth-submit">Đăng nhập</button>
+    </form>
+
+    <p class="auth-hint" id="auth-hint"></p>
+  </div>
+</div>
+
+<div class="app-container" id="app-container" style="display:none;">
+
+  <!-- Header -->
+  <header class="app-header">
+    <button class="btn btn-secondary btn-sm auth-logout-btn" id="btn-logout" title="Đăng xuất">🔒 Đăng xuất</button>
+    <h1>📋 Job Application Tracker</h1>
+    <p>Track applications · Manage interviews · Land your next role</p>
+  </header>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="tracker" id="tab-btn-tracker">📊 Application Tracker</button>
+    <button class="tab-btn" data-tab="matcher" id="tab-btn-matcher">🎯 CV vs JD Matcher</button>
+  </nav>
+
+  <!-- ===== TAB 1: Tracker ===== -->
+  <div class="tab-panel active" id="panel-tracker">
+
+  <!-- Stats Dashboard -->
+  <section class="stats-grid" id="stats-dashboard">
+    <div class="stat-card total">
+      <div class="stat-label">Total Applied</div>
+      <div class="stat-value" id="stat-total">0</div>
+    </div>
+    <div class="stat-card applied">
+      <div class="stat-label">Applied</div>
+      <div class="stat-value" id="stat-applied">0</div>
+    </div>
+    <div class="stat-card screening">
+      <div class="stat-label">Screening</div>
+      <div class="stat-value" id="stat-screening">0</div>
+    </div>
+    <div class="stat-card interview">
+      <div class="stat-label">Interview</div>
+      <div class="stat-value" id="stat-interview">0</div>
+    </div>
+    <div class="stat-card offer">
+      <div class="stat-label">Offer</div>
+      <div class="stat-value" id="stat-offer">0</div>
+    </div>
+    <div class="stat-card rejected">
+      <div class="stat-label">Rejected</div>
+      <div class="stat-value" id="stat-rejected">0</div>
+    </div>
+  </section>
+
+  <!-- Toolbar -->
+  <section class="toolbar">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Search company, position, notes...">
+    </div>
+
+    <select class="filter-select" id="filter-status">
+      <option value="all">All Statuses</option>
+      <option value="applied">Applied</option>
+      <option value="screening">Screening</option>
+      <option value="interview">Interview</option>
+      <option value="offer">Offer</option>
+      <option value="accepted">Accepted</option>
+      <option value="rejected">Rejected</option>
+      <option value="withdrawn">Withdrawn</option>
+    </select>
+
+    <select class="filter-select" id="filter-platform">
+      <option value="all">All Platforms</option>
+      <option value="LinkedIn">LinkedIn</option>
+      <option value="TopCV">TopCV</option>
+      <option value="ITviec">ITviec</option>
+      <option value="VietnamWorks">VietnamWorks</option>
+      <option value="Glassdoor">Glassdoor</option>
+      <option value="Indeed">Indeed</option>
+      <option value="Company Website">Company Website</option>
+      <option value="Referral">Referral</option>
+      <option value="Facebook">Facebook</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-sm" id="btn-export" title="Export JSON">📥 Export</button>
+      <button class="btn btn-secondary btn-sm" id="btn-import" title="Import JSON">📤 Import</button>
+      <input type="file" id="import-file" accept=".json" hidden>
+      <button class="btn btn-primary" id="btn-add">✚ Add Application</button>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <section class="table-container">
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="company">Company / Position <span class="sort-icon">↕</span></th>
+            <th>Platform</th>
+            <th class="sortable" data-sort="dateApplied">Date Applied <span class="sort-icon">↓</span></th>
+            <th class="sortable" data-sort="status">Status <span class="sort-icon">↕</span></th>
+            <th>Requirements</th>
+            <th>Salary</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Rendered by JS -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  </div><!-- end panel-tracker -->
+
+  <!-- ===== TAB 2: CV vs JD Matcher ===== -->
+  <div class="tab-panel" id="panel-matcher">
+
+    <!-- Matcher Header -->
+    <div class="matcher-intro">
+      <h2>🎯 CV vs JD Matcher</h2>
+      <p>AI-powered analysis — understands both Vietnamese & English. Semantic matching, not just keywords.</p>
+    </div>
+
+    <!-- AI Provider Config -->
+    <div class="api-key-section">
+      <div class="api-key-header">
+        <h3>🤖 AI Provider</h3>
+        <a href="#" id="api-key-help-link" target="_blank" rel="noopener" class="api-key-link">Get free key →</a>
+      </div>
+      <div class="api-key-input-group">
+        <select id="ai-provider" class="provider-select">
+          <option value="groq">Groq (Free — Recommended)</option>
+          <option value="gemini">Gemini (Google)</option>
+        </select>
+        <input type="password" id="gemini-api-key" placeholder="Paste your API key here..." autocomplete="off">
+        <button class="btn btn-secondary btn-sm" id="btn-toggle-key" title="Show/hide key">👁</button>
+        <button class="btn btn-primary btn-sm" id="btn-save-key">Save</button>
+      </div>
+      <span class="api-key-status" id="api-key-status"></span>
+    </div>
+
+    <!-- CV Version Manager -->
+    <div class="cv-version-manager">
+      <div class="cv-version-header">
+        <h3>📄 CV Version Manager</h3>
+        <div class="cv-version-actions">
+          <button class="btn btn-primary btn-sm" id="btn-add-cv-version">✚ Add CV Version</button>
+        </div>
+      </div>
+      <!-- Add CV Version Form (hidden by default) -->
+      <div class="cv-version-form" id="cv-version-form" style="display:none;">
+        <div class="form-group">
+          <label for="cv-version-label">Version Label</label>
+          <input type="text" id="cv-version-label" placeholder="e.g. v3 — Updated summary for CC1">
+        </div>
+        <div class="upload-zone" id="cv-upload-zone">
+          <div class="upload-icon">📂</div>
+          <p>Drag & drop your CV here, or <label for="cv-file-input" class="upload-link">browse files</label></p>
+          <span class="upload-hint">Supports PDF, TXT, MD files</span>
+          <input type="file" id="cv-file-input" accept=".pdf,.txt,.md,.doc,.docx" hidden>
+        </div>
+        <div class="divider-text"><span>or paste your CV text below</span></div>
+        <textarea id="cv-version-text" rows="6" placeholder="Paste your CV content here..."></textarea>
+        <div class="cv-version-form-actions">
+          <button class="btn btn-secondary btn-sm" id="btn-cancel-cv-version">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="btn-save-cv-version">💾 Save Version</button>
+        </div>
+      </div>
+      <!-- Version List -->
+      <div class="cv-version-list" id="cv-version-list">
+        <div class="empty-state-small">No CV versions saved yet. Add your first CV version above.</div>
+      </div>
+    </div>
+
+    <!-- Input Section -->
+    <div class="matcher-inputs">
+      <!-- CV Input (auto-filled from latest version) -->
+      <div class="matcher-card">
+        <div class="matcher-card-header">
+          <h3>📄 Your CV <span class="cv-active-label" id="cv-active-label"></span></h3>
+          <span class="char-count" id="cv-char-count">0 characters</span>
+        </div>
+        <textarea id="cv-text" rows="10" placeholder="Your latest CV version will appear here automatically, or paste CV text manually..."></textarea>
+      </div>
+
+      <!-- JD Input -->
+      <div class="matcher-card">
+        <div class="matcher-card-header">
+          <h3>📋 Job Description</h3>
+          <span class="char-count" id="jd-char-count">0 characters</span>
+        </div>
+        <textarea id="jd-text" rows="16" placeholder="Paste the full Job Description here..."></textarea>
+      </div>
+    </div>
+
+    <!-- Analyze Button -->
+    <div class="matcher-actions">
+      <button class="btn btn-primary btn-lg" id="btn-analyze">🔍 Analyze Match</button>
+      <button class="btn btn-secondary" id="btn-clear-matcher">🗑️ Clear All</button>
+    </div>
+
+    <!-- Results Section (hidden by default) -->
+    <div class="matcher-results" id="matcher-results" style="display:none;">
+
+      <!-- Overall Score -->
+      <div class="score-hero" id="score-hero">
+        <div class="score-ring">
+          <svg viewBox="0 0 120 120">
+            <defs>
+              <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#6366f1"/>
+                <stop offset="50%" stop-color="#8b5cf6"/>
+                <stop offset="100%" stop-color="#34d399"/>
+              </linearGradient>
+            </defs>
+            <circle class="score-ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle class="score-ring-fill" id="score-ring-fill" cx="60" cy="60" r="52"
+              stroke-dasharray="326.73" stroke-dashoffset="326.73"></circle>
+          </svg>
+          <div class="score-ring-text">
+            <span class="score-number" id="score-number">0</span>
+            <span class="score-percent">%</span>
+          </div>
+        </div>
+        <div class="score-meta">
+          <h3 id="score-label">Match Score</h3>
+          <p id="score-summary">Analyzing your CV against the job description...</p>
+        </div>
+      </div>
+
+      <!-- Category Breakdown -->
+      <div class="category-grid" id="category-grid">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Keyword Details -->
+      <div class="keyword-sections" id="keyword-sections">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Suggestions -->
+      <div class="suggestions-card" id="suggestions-card">
+        <h3>💡 Suggestions to Improve Your Match</h3>
+        <ul id="suggestions-list"></ul>
+      </div>
+
+    </div>
+
+  </div><!-- end panel-matcher -->
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    Nguyen Thi My Phuong — Job Application Tracker &copy; 2026
+  </footer>
+
+</div>
+
+<!-- ===== MODAL: Add/Edit Application ===== -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">Add New Application</h2>
+      <button class="btn-icon" id="btn-modal-cancel" title="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="app-form">
+        <div class="form-grid">
+
+          <div class="form-group">
+            <label for="f-company">Company <span class="required">*</span></label>
+            <input type="text" id="f-company" required placeholder="e.g. FPT Software">
+          </div>
+
+          <div class="form-group">
+            <label for="f-position">Position <span class="required">*</span></label>
+            <input type="text" id="f-position" required placeholder="e.g. Business Analyst">
+          </div>
+
+          <div class="form-group">
+            <label for="f-platform">Platform <span class="required">*</span></label>
+            <select id="f-platform" required>
+              <option value="LinkedIn">LinkedIn</option>
+              <option value="TopCV">TopCV</option>
+              <option value="ITviec">ITviec</option>
+              <option value="VietnamWorks">VietnamWorks</option>
+              <option value="Glassdoor">Glassdoor</option>
+              <option value="Indeed">Indeed</option>
+              <option value="Company Website">Company Website</option>
+              <option value="Referral">Referral</option>
+              <option value="Facebook">Facebook</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="f-status">Status <span class="required">*</span></label>
+            <select id="f-status" required>
+              <option value="Applied">Applied</option>
+              <option value="Screening">Screening</option>
+              <option value="Interview">Interview</option>
+              <option value="Offer">Offer</option>
+              <option value="Accepted">Accepted</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Withdrawn">Withdrawn</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="f-date-applied">Date Applied <span class="required">*</span></label>
+            <input type="date" id="f-date-applied" required>
+          </div>
+
+          <div class="form-group">
+            <label for="f-interview-date">Interview Date</label>
+            <input type="date" id="f-interview-date">
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-jd-link">JD Link</label>
+            <input type="url" id="f-jd-link" placeholder="https://...">
+          </div>
+
+          <div class="form-group">
+            <label for="f-salary">Salary Range</label>
+            <input type="text" id="f-salary" placeholder="e.g. $1,000 - $1,500">
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-cover-letter">Cover Letter</label>
+            <div class="cover-letter-input">
+              <div class="cover-letter-upload">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-cl">📂 Upload File</button>
+                <input type="file" id="cl-file-input" accept=".pdf,.txt,.md,.doc,.docx" hidden>
+                <span class="cl-filename" id="cl-filename"></span>
+              </div>
+              <div class="divider-text"><span>or paste cover letter text</span></div>
+              <textarea id="f-cover-letter" rows="5" placeholder="Paste your cover letter content here..."></textarea>
+            </div>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-requirements">Key Requirements (from JD)</label>
+            <textarea id="f-requirements" rows="3" placeholder="Summarize the key requirements from the JD..."></textarea>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-notes">Notes</label>
+            <textarea id="f-notes" rows="3" placeholder="Personal notes, follow-up reminders..."></textarea>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-result">Result</label>
+            <input type="text" id="f-result" placeholder="e.g. Passed to Round 2, Offered $1,200/month...">
+          </div>
+
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">💾 Save Application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: View Detail ===== -->
+<div class="modal-overlay" id="detail-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Application Details</h2>
+      <button class="btn-icon" id="btn-detail-close" title="Close">✕</button>
+    </div>
+    <div class="modal-body" id="detail-body">
+      <!-- Rendered by JS -->
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Confirm Delete ===== -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">⚠️</div>
+    <h3>Delete Application?</h3>
+    <p>Are you sure you want to delete the application for <strong id="confirm-company-name"></strong>? This action cannot be undone.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button>
+      <button class="btn btn-danger" id="btn-confirm-delete">🗑️ Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
