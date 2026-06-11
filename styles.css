@@ -170,6 +170,51 @@
 }
 
 .auth-error.show { display: block; }
+.auth-error.ok {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.3);
+  color: var(--accent-emerald);
+}
+
+/* "Forgot password?" link */
+.auth-forgot-row { text-align: right; margin: -0.4rem 0 0.8rem; }
+.auth-forgot {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.auth-forgot:hover { color: var(--accent-indigo-hover); text-decoration: underline; }
+
+/* Loading splash (until Firebase resolves auth state) */
+.app-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  z-index: 9999;
+}
+.app-loading-spinner {
+  width: 38px;
+  height: 38px;
+  border: 3px solid var(--border-glass);
+  border-top-color: var(--accent-indigo);
+  border-radius: 50%;
+  animation: appSpin 0.8s linear infinite;
+}
+@keyframes appSpin { to { transform: rotate(360deg); } }
+.app-loading .loading-error {
+  max-width: 360px;
+  text-align: center;
+  line-height: 1.5;
+  color: #fda4af;
+}
 
 .auth-submit {
   width: 100%;

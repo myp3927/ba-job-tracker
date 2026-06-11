@@ -20,9 +20,16 @@ service cloud.firestore {
 
     // Job applications: owner has full access to their own; admin can read & manage all.
     match /applications/{appId} {
-      allow read:          if signedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
-      allow create:        if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow read:   if signedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid is string;
+      // Owner (or admin) can edit, but ownerUid must NOT change — prevents
+      // transferring/spoofing ownership of a document.
+      allow update: if signedIn()
+                    && (resource.data.ownerUid == request.auth.uid || isAdmin())
+                    && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }
   }
 }

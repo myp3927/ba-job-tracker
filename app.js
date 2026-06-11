@@ -4,6 +4,19 @@
  */
 
 // ---- Firebase Init ----
+// Fail gracefully if the Firebase SDK never loaded (CDN blocked, offline, ad-blocker)
+// — otherwise the page would sit blank forever with no explanation.
+if (typeof firebase === 'undefined' || typeof firebase.initializeApp !== 'function') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById('app-loading');
+    if (el) {
+      el.innerHTML = '<div class="loading-error">⚠️ Không tải được Firebase.<br>'
+        + 'Kiểm tra kết nối mạng hoặc tắt trình chặn quảng cáo, rồi tải lại trang.</div>';
+    }
+  });
+  throw new Error('Firebase SDK failed to load');
+}
+
 const firebaseConfig = {
   apiKey: "AIzaSyCbFAWrvAkrEe6ql1Puv_Mx27OwPJui1ic",
   authDomain: "ba-job-tracker.firebaseapp.com",
@@ -126,10 +139,17 @@ function showAuthError(msg) {
   const el = document.getElementById('auth-error');
   el.textContent = msg;
   el.classList.add('show');
+  el.classList.remove('ok');
+}
+
+function showAuthInfo(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.classList.add('show', 'ok');
 }
 
 function clearAuthError() {
-  document.getElementById('auth-error').classList.remove('show');
+  document.getElementById('auth-error').classList.remove('show', 'ok');
 }
 
 // Translate Firebase error codes into friendly Vietnamese messages.
@@ -148,12 +168,19 @@ function friendlyAuthError(err) {
   return map[err.code] || ('Lỗi đăng nhập: ' + (err.message || err.code));
 }
 
+function hideLoadingSplash() {
+  const el = document.getElementById('app-loading');
+  if (el) el.style.display = 'none';
+}
+
 function showLogin() {
+  hideLoadingSplash();
   document.getElementById('auth-overlay').style.display = '';
   document.getElementById('app-container').style.display = 'none';
 }
 
 function startApp() {
+  hideLoadingSplash();
   document.getElementById('auth-overlay').style.display = 'none';
   document.getElementById('app-container').style.display = '';
   if (!startApp._initialized) {
@@ -164,8 +191,13 @@ function startApp() {
 
 async function logout() {
   if (unsubscribeApps) { unsubscribeApps(); unsubscribeApps = null; }
+  // Clear device-local, user-sensitive data (AI API key + saved CV versions)
+  // so it can't leak to the next person who logs in on a shared browser.
+  localStorage.removeItem(API_KEY_STORAGE);
+  localStorage.removeItem(CV_VERSIONS_KEY);
   await auth.signOut();
-  // onAuthStateChanged will show the login screen.
+  // Reload for a guaranteed-clean state (clears in-memory + on-screen data).
+  location.reload();
 }
 
 // Switch the auth card between Login and Sign-up modes.
@@ -182,6 +214,9 @@ function setAuthMode(mode) {
   document.getElementById('auth-switch-link').textContent = isSignup ? 'Đăng nhập' : 'Đăng ký';
   document.getElementById('auth-password').setAttribute(
     'autocomplete', isSignup ? 'new-password' : 'current-password');
+  // "Forgot password?" only makes sense when logging in.
+  const forgot = document.getElementById('auth-forgot');
+  if (forgot) forgot.style.display = isSignup ? 'none' : '';
 }
 
 // Detect in-app browsers (GapoWork, Zalo, Messenger, Facebook, Instagram...).
@@ -232,6 +267,27 @@ function initAuth() {
     e.preventDefault();
     setAuthMode(authMode === 'login' ? 'signup' : 'login');
   });
+
+  // Forgot password — send a reset email to the address in the email field.
+  const forgotLink = document.getElementById('auth-forgot');
+  if (forgotLink) {
+    forgotLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      clearAuthError();
+      const email = emailInput.value.trim();
+      if (!email) {
+        showAuthError('Nhập email của bạn vào ô trên, rồi bấm "Quên mật khẩu?" để nhận link đặt lại.');
+        emailInput.focus();
+        return;
+      }
+      try {
+        await auth.sendPasswordResetEmail(email);
+        showAuthInfo(`✅ Đã gửi email đặt lại mật khẩu tới ${email}. Hãy kiểm tra hộp thư (cả mục Spam).`);
+      } catch (err) {
+        showAuthError(friendlyAuthError(err));
+      }
+    });
+  }
 
   // Email/password submit
   form.addEventListener('submit', async (e) => {
@@ -1470,6 +1526,7 @@ async function analyzeWithGemini(cvText, jdText, apiKey) {
             generationConfig: {
               temperature: 0.3,
               maxOutputTokens: 4096,
+              responseMimeType: 'application/json',
             }
           })
         });
