@@ -110,7 +110,6 @@ function listenApplications() {
 let applications = [];
 let currentUser = null;
 let isAdmin = false;
-let currentFilter = 'all';
 let currentSearch = '';
 let currentSort = { field: 'dateApplied', direction: 'desc' };
 let editingId = null;
@@ -311,19 +310,11 @@ function setupEventListeners() {
     renderTable();
   });
 
-  // Filter
-  document.getElementById('filter-status').addEventListener('change', (e) => {
-    currentFilter = e.target.value;
-    renderTable();
-  });
+  // Filter by status (getFilteredApplications reads the select value directly)
+  document.getElementById('filter-status').addEventListener('change', renderTable);
 
-  // Filter platform
-  document.getElementById('filter-platform').addEventListener('change', (e) => {
-    currentFilter = e.target.value === 'all' ? currentFilter : e.target.value;
-    // We'll use a separate state for platform filter
-    document.getElementById('filter-platform').dataset.value = e.target.value;
-    renderTable();
-  });
+  // Filter by platform
+  document.getElementById('filter-platform').addEventListener('change', renderTable);
 
   // Admin tab → load all users' data when opened
   document.getElementById('tab-btn-admin').addEventListener('click', renderAdminView);
@@ -414,7 +405,7 @@ function renderStats() {
   STATUS_OPTIONS.forEach(s => counts[s.toLowerCase()] = 0);
 
   applications.forEach(app => {
-    const key = app.status.toLowerCase();
+    const key = (app.status || '').toLowerCase();
     if (counts[key] !== undefined) counts[key]++;
   });
 
@@ -433,7 +424,7 @@ function getFilteredApplications() {
   // Status filter
   const statusFilter = document.getElementById('filter-status').value;
   if (statusFilter !== 'all') {
-    filtered = filtered.filter(app => app.status.toLowerCase() === statusFilter.toLowerCase());
+    filtered = filtered.filter(app => (app.status || '').toLowerCase() === statusFilter.toLowerCase());
   }
 
   // Platform filter
@@ -509,7 +500,7 @@ function renderTable() {
       </td>
       <td><span class="platform-tag">${escapeHtml(app.platform)}</span></td>
       <td>${formatDate(app.dateApplied)}</td>
-      <td><span class="status-badge ${app.status.toLowerCase()}">${app.status}</span></td>
+      <td><span class="status-badge ${statusClass(app.status)}">${escapeHtml(app.status)}</span></td>
       <td class="truncate" title="${escapeHtml(app.requirements)}">${escapeHtml(app.requirements) || '—'}</td>
       <td>${app.salary ? escapeHtml(app.salary) : '—'}</td>
       <td>
@@ -636,7 +627,7 @@ function viewDetail(id) {
       </div>
       <div class="detail-item">
         <span class="detail-label">Status</span>
-        <span class="detail-value"><span class="status-badge ${app.status.toLowerCase()}">${app.status}</span></span>
+        <span class="detail-value"><span class="status-badge ${statusClass(app.status)}">${escapeHtml(app.status)}</span></span>
       </div>
       <div class="detail-item">
         <span class="detail-label">Date Applied</span>
@@ -652,7 +643,7 @@ function viewDetail(id) {
       </div>
       <div class="detail-item">
         <span class="detail-label">JD Link</span>
-        <span class="detail-value">${app.jdLink ? `<a href="${escapeHtml(app.jdLink)}" target="_blank" rel="noopener">${escapeHtml(app.jdLink)}</a>` : '—'}</span>
+        <span class="detail-value">${app.jdLink ? `<a href="${escapeHtml(safeUrl(app.jdLink))}" target="_blank" rel="noopener">${escapeHtml(app.jdLink)}</a>` : '—'}</span>
       </div>
       <div class="detail-item full-width">
         <span class="detail-label">Key Requirements</span>
@@ -808,7 +799,7 @@ async function renderAdminView() {
               <td>${escapeHtml(a.company || '')}<br><span class="admin-pos">${escapeHtml(a.position || '')}</span></td>
               <td>${escapeHtml(a.platform || '—')}</td>
               <td>${formatDate(a.dateApplied)}</td>
-              <td><span class="status-badge ${(a.status || '').toLowerCase()}">${escapeHtml(a.status || '')}</span></td>
+              <td><span class="status-badge ${statusClass(a.status)}">${escapeHtml(a.status || '')}</span></td>
               <td>${a.salary ? escapeHtml(a.salary) : '—'}</td>
             </tr>`).join('');
 
@@ -846,11 +837,28 @@ function showToast(message, type = 'info') {
 }
 
 // ---- Utilities ----
+// Escapes &, <, >, " and ' so the result is safe in both text and attribute contexts.
 function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Returns the URL only if it uses a safe scheme (http/https/mailto); otherwise '#'.
+// Blocks javascript:, data:, etc. that would execute on click.
+function safeUrl(url) {
+  const u = (url || '').trim();
+  return /^(https?:|mailto:)/i.test(u) ? u : '#';
+}
+
+// Maps a status to a safe CSS class token (whitelist of letters only).
+// Prevents attribute-injection via crafted status values from imported data.
+function statusClass(status) {
+  return (status || '').toLowerCase().replace(/[^a-z]/g, '');
 }
 
 function formatDate(dateStr) {
@@ -1088,9 +1096,9 @@ function setupMatcherEvents() {
     document.getElementById('jd-char-count').textContent = `${jdText.value.length} characters`;
   });
 
-  // File upload for CV version form
-  cvFileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
+  // Load a file (PDF/TXT/MD) into the CV Version form's textarea — shared by
+  // both the "browse" picker and drag & drop so they behave identically.
+  async function loadFileIntoVersionForm(file) {
     if (!file) return;
     const ext = file.name.split('.').pop().toLowerCase();
     try {
@@ -1111,6 +1119,11 @@ function setupMatcherEvents() {
     } catch (err) {
       showToast('Error reading file.', 'error');
     }
+  }
+
+  // File upload for CV version form (browse picker)
+  cvFileInput.addEventListener('change', async (e) => {
+    await loadFileIntoVersionForm(e.target.files[0]);
     e.target.value = '';
   });
 
@@ -1129,11 +1142,7 @@ function setupMatcherEvents() {
     e.preventDefault();
     uploadZone.classList.remove('drag-over');
     if (e.dataTransfer.files.length) {
-      const file = e.dataTransfer.files[0];
-      const fakeEvent = { target: { files: [file], value: '' } };
-      cvFileInput.dispatchEvent(new Event('change'));
-      // Manually handle
-      handleCVFile(file);
+      loadFileIntoVersionForm(e.dataTransfer.files[0]);
     }
   });
 
@@ -1241,31 +1250,6 @@ function deleteCvVersion(id) {
 }
 
 // ---- File Handling ----
-async function handleCVFile(file) {
-  if (!file) return;
-
-  const cvText = document.getElementById('cv-text');
-  const ext = file.name.split('.').pop().toLowerCase();
-
-  try {
-    if (ext === 'pdf') {
-      const text = await extractPdfText(file);
-      cvText.value = text;
-    } else if (['txt', 'md'].includes(ext)) {
-      const text = await file.text();
-      cvText.value = text;
-    } else {
-      showToast('Unsupported file type. Please use PDF, TXT, or MD.', 'error');
-      return;
-    }
-    document.getElementById('cv-char-count').textContent = `${cvText.value.length} characters`;
-    showToast(`Loaded: ${file.name}`, 'success');
-  } catch (err) {
-    console.error(err);
-    showToast('Error reading file. Try pasting your CV text instead.', 'error');
-  }
-}
-
 async function extractPdfText(file) {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
