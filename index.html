@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Track your job applications, interviews, and offers in one place.">
   <title>Job Application Tracker — Nguyen Thi My Phuong</title>
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -430,6 +430,17 @@
           </div>
 
           <div class="form-group full-width">
+            <label>CV đã gửi cho nhà tuyển dụng</label>
+            <div class="cv-attach">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-cv-file">📎 Upload CV</button>
+              <input type="file" id="cv-file-attach-input" accept=".pdf,.doc,.docx,.txt,.md" hidden>
+              <span class="cv-attach-name" id="cv-attach-name"></span>
+              <button type="button" class="btn-icon" id="btn-remove-cv-file" title="Gỡ file" style="display:none;">✕</button>
+            </div>
+            <span class="upload-hint">Tối đa 500KB · PDF, DOC, DOCX, TXT, MD</span>
+          </div>
+
+          <div class="form-group full-width">
             <label for="f-requirements">Key Requirements (from JD)</label>
             <textarea id="f-requirements" rows="3" placeholder="Summarize the key requirements from the JD..."></textarea>
           </div>
@@ -488,6 +499,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

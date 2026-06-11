@@ -126,6 +126,7 @@ let isAdmin = false;
 let currentSearch = '';
 let currentSort = { field: 'dateApplied', direction: 'desc' };
 let editingId = null;
+let pendingCvFile = null; // { name, type, data(base64 dataURL) } attached in the open modal
 
 // ============================================
 //  Auth Layer — Firebase Authentication
@@ -423,6 +424,34 @@ function setupEventListeners() {
     e.target.value = '';
   });
 
+  // Attach the actual CV file sent to the recruiter (stored as base64 on the doc)
+  document.getElementById('btn-upload-cv-file').addEventListener('click', () => {
+    document.getElementById('cv-file-attach-input').click();
+  });
+  document.getElementById('cv-file-attach-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const MAX = 500 * 1024; // keep the Firestore doc safely under its 1MB limit
+    if (file.size > MAX) {
+      showToast('File quá lớn (tối đa 500KB). Hãy nén PDF hoặc dùng file nhỏ hơn.', 'error');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      pendingCvFile = { name: file.name, type: file.type || '', data: reader.result };
+      renderCvAttach();
+      showToast(`Đã đính kèm CV: ${file.name}`, 'success');
+    };
+    reader.onerror = () => showToast('Lỗi đọc file CV.', 'error');
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+  document.getElementById('btn-remove-cv-file').addEventListener('click', () => {
+    pendingCvFile = null;
+    renderCvAttach();
+  });
+
   // Detail modal close
   document.getElementById('detail-overlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closeDetailModal();
@@ -592,6 +621,19 @@ function updateSortIndicators() {
   });
 }
 
+// Reflect the currently-attached CV file (or none) in the form.
+function renderCvAttach() {
+  const nameEl = document.getElementById('cv-attach-name');
+  const removeBtn = document.getElementById('btn-remove-cv-file');
+  if (pendingCvFile && pendingCvFile.name) {
+    nameEl.textContent = `📎 ${pendingCvFile.name}`;
+    removeBtn.style.display = '';
+  } else {
+    nameEl.textContent = '';
+    removeBtn.style.display = 'none';
+  }
+}
+
 // Toggle the "Other platform" free-text input based on the Platform select.
 // Marks it required only while visible so a hidden field never blocks submit.
 function togglePlatformOther(focus = true) {
@@ -611,11 +653,15 @@ function openModal(id = null) {
   const form = document.getElementById('app-form');
 
   form.reset();
+  pendingCvFile = null;
 
   if (id) {
     const app = applications.find(a => a.id === id);
     if (!app) return;
     title.textContent = 'Edit Application';
+    if (app.cvFileData) {
+      pendingCvFile = { name: app.cvFileName || 'CV', type: app.cvFileType || '', data: app.cvFileData };
+    }
     document.getElementById('f-company').value = app.company;
     document.getElementById('f-position').value = app.position;
     document.getElementById('f-jd-link').value = app.jdLink || '';
@@ -642,6 +688,7 @@ function openModal(id = null) {
   }
 
   togglePlatformOther(false); // sync the "Other" input visibility without stealing focus
+  renderCvAttach();
   modal.classList.add('active');
   setTimeout(() => document.getElementById('f-company').focus(), 300);
 }
@@ -679,6 +726,9 @@ async function handleFormSubmit(e) {
     coverLetter: document.getElementById('f-cover-letter').value.trim(),
     interviewDate: document.getElementById('f-interview-date').value,
     result: document.getElementById('f-result').value.trim(),
+    cvFileName: pendingCvFile ? pendingCvFile.name : '',
+    cvFileType: pendingCvFile ? pendingCvFile.type : '',
+    cvFileData: pendingCvFile ? pendingCvFile.data : '',
     updatedAt: new Date().toISOString()
   };
 
@@ -746,6 +796,10 @@ function viewDetail(id) {
       <div class="detail-item full-width">
         <span class="detail-label">Cover Letter</span>
         <div class="detail-value">${app.coverLetter ? `<details class="cl-details"><summary>📄 View Cover Letter (${app.coverLetter.length} chars)</summary><pre class="cl-content">${escapeHtml(app.coverLetter)}</pre></details>` : '—'}</div>
+      </div>
+      <div class="detail-item full-width">
+        <span class="detail-label">CV đã gửi</span>
+        <div class="detail-value">${app.cvFileData ? `<a href="${escapeHtml(app.cvFileData)}" download="${escapeHtml(app.cvFileName || 'cv')}">📎 ${escapeHtml(app.cvFileName || 'Tải CV')}</a>` : '—'}</div>
       </div>
       <div class="detail-item full-width">
         <span class="detail-label">Notes</span>

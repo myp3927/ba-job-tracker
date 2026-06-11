@@ -1790,6 +1790,19 @@ th.sortable.sorted-desc .sort-icon {
   font-weight: 500;
 }
 
+/* Attached CV file (sent to recruiter) */
+.cv-attach {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cv-attach-name {
+  font-size: 0.8rem;
+  color: var(--accent-emerald);
+  font-weight: 500;
+}
+
 /* Cover Letter in Detail Modal */
 .cl-details {
   width: 100%;
