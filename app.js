@@ -393,6 +393,9 @@ function setupEventListeners() {
   // Modal form submit
   document.getElementById('app-form').addEventListener('submit', handleFormSubmit);
 
+  // Show the free-text input when Platform = "Other"
+  document.getElementById('f-platform').addEventListener('change', togglePlatformOther);
+
   // Cover letter file upload
   document.getElementById('btn-upload-cl').addEventListener('click', () => {
     document.getElementById('cl-file-input').click();
@@ -585,6 +588,17 @@ function updateSortIndicators() {
   });
 }
 
+// Toggle the "Other platform" free-text input based on the Platform select.
+// Marks it required only while visible so a hidden field never blocks submit.
+function togglePlatformOther(focus = true) {
+  const sel = document.getElementById('f-platform');
+  const other = document.getElementById('f-platform-other');
+  const show = sel.value === 'Other';
+  other.style.display = show ? '' : 'none';
+  other.required = show;
+  if (show && focus) other.focus();
+}
+
 // ---- Modal (Add/Edit) ----
 function openModal(id = null) {
   editingId = id;
@@ -601,7 +615,14 @@ function openModal(id = null) {
     document.getElementById('f-company').value = app.company;
     document.getElementById('f-position').value = app.position;
     document.getElementById('f-jd-link').value = app.jdLink || '';
-    document.getElementById('f-platform').value = app.platform;
+    // A custom (non-standard) platform → select "Other" and fill the free-text input.
+    if (PLATFORM_OPTIONS.includes(app.platform)) {
+      document.getElementById('f-platform').value = app.platform;
+      document.getElementById('f-platform-other').value = '';
+    } else {
+      document.getElementById('f-platform').value = 'Other';
+      document.getElementById('f-platform-other').value = app.platform || '';
+    }
     document.getElementById('f-date-applied').value = app.dateApplied;
     document.getElementById('f-status').value = app.status;
     document.getElementById('f-requirements').value = app.requirements || '';
@@ -616,6 +637,7 @@ function openModal(id = null) {
     document.getElementById('f-status').value = 'Applied';
   }
 
+  togglePlatformOther(false); // sync the "Other" input visibility without stealing focus
   modal.classList.add('active');
   setTimeout(() => document.getElementById('f-company').focus(), 300);
 }
@@ -628,11 +650,23 @@ function closeModal() {
 async function handleFormSubmit(e) {
   e.preventDefault();
 
+  // Resolve platform: when "Other" is chosen, store the typed custom value.
+  let platform = document.getElementById('f-platform').value;
+  if (platform === 'Other') {
+    const custom = document.getElementById('f-platform-other').value.trim();
+    if (!custom) {
+      showToast('Vui lòng nhập tên nền tảng khác.', 'error');
+      document.getElementById('f-platform-other').focus();
+      return;
+    }
+    platform = custom;
+  }
+
   const appData = {
     company: document.getElementById('f-company').value.trim(),
     position: document.getElementById('f-position').value.trim(),
     jdLink: document.getElementById('f-jd-link').value.trim(),
-    platform: document.getElementById('f-platform').value,
+    platform: platform,
     dateApplied: document.getElementById('f-date-applied').value,
     status: document.getElementById('f-status').value,
     requirements: document.getElementById('f-requirements').value.trim(),
