@@ -486,10 +486,14 @@ function getFilteredApplications() {
     filtered = filtered.filter(app => (app.status || '').toLowerCase() === statusFilter.toLowerCase());
   }
 
-  // Platform filter
+  // Platform filter. "Other" matches any custom/typed-in platform — i.e. anything
+  // that isn't one of the predefined named platforms in the dropdown.
   const platformEl = document.getElementById('filter-platform');
   const platformFilter = platformEl ? platformEl.value : 'all';
-  if (platformFilter !== 'all') {
+  if (platformFilter === 'Other') {
+    const named = PLATFORM_OPTIONS.filter(p => p !== 'Other');
+    filtered = filtered.filter(app => !named.includes(app.platform));
+  } else if (platformFilter !== 'all') {
     filtered = filtered.filter(app => app.platform === platformFilter);
   }
 
