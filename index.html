@@ -417,6 +417,17 @@
           </div>
 
           <div class="form-group full-width">
+            <label>CV đã gửi cho nhà tuyển dụng</label>
+            <div class="cv-attach">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-cv-file">📎 Upload CV</button>
+              <input type="file" id="cv-file-attach-input" accept=".pdf,.doc,.docx,.txt,.md" hidden>
+              <span class="cv-attach-name" id="cv-attach-name"></span>
+              <button type="button" class="btn-icon" id="btn-remove-cv-file" title="Gỡ file" style="display:none;">✕</button>
+            </div>
+            <span class="upload-hint">Tối đa 500KB · PDF, DOC, DOCX, TXT, MD</span>
+          </div>
+
+          <div class="form-group full-width">
             <label for="f-cover-letter">Cover Letter</label>
             <div class="cover-letter-input">
               <div class="cover-letter-upload">
@@ -427,17 +438,6 @@
               <div class="divider-text"><span>or paste cover letter text</span></div>
               <textarea id="f-cover-letter" rows="5" placeholder="Paste your cover letter content here..."></textarea>
             </div>
-          </div>
-
-          <div class="form-group full-width">
-            <label>CV đã gửi cho nhà tuyển dụng</label>
-            <div class="cv-attach">
-              <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-cv-file">📎 Upload CV</button>
-              <input type="file" id="cv-file-attach-input" accept=".pdf,.doc,.docx,.txt,.md" hidden>
-              <span class="cv-attach-name" id="cv-attach-name"></span>
-              <button type="button" class="btn-icon" id="btn-remove-cv-file" title="Gỡ file" style="display:none;">✕</button>
-            </div>
-            <span class="upload-hint">Tối đa 500KB · PDF, DOC, DOCX, TXT, MD</span>
           </div>
 
           <div class="form-group full-width">
