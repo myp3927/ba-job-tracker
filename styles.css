@@ -525,8 +525,9 @@ body::before {
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
   color: var(--text-muted);
-  font-size: 0.9rem;
   pointer-events: none;
   z-index: 1; /* sit above the input — its backdrop-filter otherwise paints over & blurs the icon */
 }
