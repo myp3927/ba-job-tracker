@@ -32,6 +32,9 @@ const db = firebase.firestore();
 // Emails with admin rights — can view ALL users' data. Add more emails here if needed.
 const ADMIN_EMAILS = ['myphuongvlo.2020@gmail.com'];
 
+// Whitelist: only these emails can access the app. Everyone else sees the maintenance screen.
+const ALLOWED_EMAILS = ['myphuongvlo.2020@gmail.com'];
+
 // ---- Data Layer ----
 const CV_VERSIONS_KEY = 'job_tracker_cv_versions';
 
@@ -178,6 +181,14 @@ function showLogin() {
   hideLoadingSplash();
   document.getElementById('auth-overlay').style.display = '';
   document.getElementById('app-container').style.display = 'none';
+  document.getElementById('maintenance-overlay').style.display = 'none';
+}
+
+function showMaintenance() {
+  hideLoadingSplash();
+  document.getElementById('auth-overlay').style.display = 'none';
+  document.getElementById('app-container').style.display = 'none';
+  document.getElementById('maintenance-overlay').style.display = '';
 }
 
 function startApp() {
@@ -320,6 +331,13 @@ function initAuth() {
   // React to login/logout
   auth.onAuthStateChanged(async (user) => {
     if (user) {
+      // Block non-whitelisted accounts — sign them out and show maintenance screen.
+      if (!ALLOWED_EMAILS.includes((user.email || '').toLowerCase())) {
+        await auth.signOut();
+        showMaintenance();
+        return;
+      }
+
       currentUser = user;
       isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
 

@@ -1961,3 +1961,59 @@ th.sortable.sorted-desc .sort-icon {
   background: rgba(244,63,94,0.06);
   border-left: 3px solid var(--accent-rose);
 }
+
+/* ---- Maintenance / Under Development Screen ---- */
+.maintenance-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(ellipse at top, rgba(99,102,241,0.18), transparent 60%),
+    var(--bg-primary);
+}
+
+.maintenance-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+  padding: 3rem 2rem;
+  text-align: center;
+  animation: authFadeIn 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.maintenance-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.maintenance-card h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  background: var(--gradient-hero);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.maintenance-card p {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+}
+
+.maintenance-sub {
+  color: var(--text-muted) !important;
+  font-size: 0.82rem !important;
+}
